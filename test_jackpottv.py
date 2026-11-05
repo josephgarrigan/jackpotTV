@@ -65,3 +65,25 @@ assert r.status_code == 403, r.status_code
 r = c.get("/api/now/1")
 assert r.status_code == 200 and r.json()["live"] is True
 print("jackpotTV gate tests: ALL PASS")
+
+# --- stage + ticker feed ---
+r = c.get("/stage")
+assert r.status_code == 200 and "ticker" in r.text and "Atrium" in r.text
+r = c.get("/feed.json")
+assert r.status_code == 200 and "items" in r.json()
+
+import importlib, ticker
+from pathlib import Path as _P
+ticker.SOURCE_FILE = _P("/tmp/jackpot-ticker-source.json")
+ticker.SOURCE_FILE.write_text("{}")
+doc = ticker.build(0)
+assert doc["items"], "ticker produced no items"
+assert all("text" in i for i in doc["items"])
+src = ticker.load_source()
+src["judge"] = ["Welcome, judges — this is live"]
+src["music"] = "Test Tone — 440Hz"
+ticker.SOURCE_FILE.write_text(__import__("json").dumps(src))
+doc = ticker.build(1)
+kinds = [i["kind"] for i in doc["items"]]
+assert "judge" in kinds and "music" in kinds, kinds
+print("stage + ticker feed: PASS")

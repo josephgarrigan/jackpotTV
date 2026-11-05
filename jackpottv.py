@@ -14,6 +14,7 @@ Env:
 """
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import sqlite3
@@ -27,6 +28,8 @@ DB = Path(os.environ.get("JACKPOT_DB", "jackpottv.db"))
 ADMIN = os.environ.get("JACKPOT_ADMIN", "captain")
 HLS_DIR = Path(os.environ.get("JACKPOT_HLS_DIR", "/var/lib/atrium-cast/hls"))
 COOKIE = "jackpottv_session"
+FEED = Path(os.environ.get("JACKPOT_FEED", "/var/lib/jackpottv/feed.json"))
+STAGE = Path(__file__).with_name("stage.html")
 
 app = FastAPI(title="jackpotTV")
 
@@ -255,6 +258,21 @@ def stream(request: Request, cid: int, name: str):
         raise HTTPException(404, "unknown media type")
     resp.headers["Cache-Control"] = "no-cache"
     return resp
+
+@app.get("/stage", response_class=HTMLResponse)
+def stage_page() -> str:
+    """The broadcast frame: floor on top, scrolling feed along the bottom.
+    Public to view locally; the tuned channel stays behind the member gate."""
+    return STAGE.read_text()
+
+
+@app.get("/feed.json")
+def feed() -> dict:
+    try:
+        return json.loads(FEED.read_text())
+    except Exception:
+        return {"seq": 0, "items": [{"kind": "sys", "text": "jackpotTV — feed warming up"}]}
+
 
 @app.get("/api/now/{cid}")
 def now_playing(cid: int) -> dict:

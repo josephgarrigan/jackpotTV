@@ -59,3 +59,24 @@ cast origin can stay on the LAN. Segment names are constrained (no path traversa
 uv run --no-project --with fastapi --with httpx --with python-multipart python test_jackpottv.py
 # jackpotTV gate tests: ALL PASS
 ```
+
+## The stage (what the camera sees)
+
+`/stage` is the broadcast frame at 1280×720: the Atrium fills the top, and a
+jackpotTV-branded ticker runs along the bottom — judge messages, now playing, who
+is working on the floor, and stories moving, from the Atrium tape.
+
+- `ticker.py` builds `/feed.json` every 5s from the tape (`:8095/tape`), the live
+  snapshot, and a source file.
+- You control the judge channel with one command, no restart:
+
+```bash
+tickerctl "Welcome to jackpotTV — everything you are about to see is live"
+tickerctl --music "Miles Davis — So What"
+tickerctl --clear
+```
+
+- The newest judge message also pins in the top-right corner so it does not
+  scroll away mid-sentence.
+- The stage frame is public to compose the broadcast; the *tuned channel* in the
+  guide stays behind the member gate.

@@ -1,0 +1,96 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>jackpotTV — stage</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1280px; height: 720px; overflow: hidden; background: #07080a;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #e8eaed; }
+  /* the floor, full-bleed */
+  #floor { position: absolute; inset: 0 0 84px 0; width: 1280px; height: 636px;
+    border: 0; background: #0b0d10; }
+  /* bottom ticker band */
+  #ticker { position: absolute; left: 0; right: 0; bottom: 0; height: 84px;
+    background: linear-gradient(180deg, #11141a, #0a0c0f);
+    border-top: 2px solid #b8860b; overflow: hidden; }
+  #brand { position: absolute; left: 0; top: 0; bottom: 0; width: 210px;
+    display: flex; flex-direction: column; justify-content: center; padding: 0 18px;
+    background: #0d0f13; border-right: 1px solid #232a35; z-index: 2; }
+  #brand .logo { font-size: 21px; font-weight: 800; letter-spacing: .14em; color: #f5c542; }
+  #brand .tag { font-size: 11px; letter-spacing: .22em; color: #8a94a3; text-transform: uppercase; }
+  #track { position: absolute; left: 210px; right: 0; top: 0; bottom: 0;
+    display: flex; align-items: center; overflow: hidden; }
+  #strip { display: inline-flex; gap: 0; white-space: nowrap; will-change: transform; }
+  .item { display: inline-flex; align-items: center; gap: 10px; padding: 0 30px;
+    font-size: 25px; font-weight: 600; line-height: 1.2; }
+  .item .sep { color: #b8860b; font-weight: 800; }
+  .judge { color: #ffe9a8; }
+  .judge .who { color: #f5c542; font-size: 14px; letter-spacing: .18em; text-transform: uppercase; }
+  .agent { color: #a8e6ff; } .story { color: #b8ffc9; } .music { color: #ffc4e1; }
+  .sys { color: #9aa4b2; } .join { color: #ffd28a; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #ff5d5d;
+    box-shadow: 0 0 10px #ff5d5d; flex: none; }
+  .pulse { animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+  /* latest judge message, pinned so it never scrolls away mid-sentence */
+  #pinned { position: absolute; right: 14px; top: 10px; max-width: 430px;
+    background: rgba(13,15,19,.92); border: 1px solid #b8860b; border-radius: 10px;
+    padding: 10px 14px; display: none; }
+  #pinned .who { color: #f5c542; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; }
+  #pinned .msg { font-size: 17px; color: #ffe9a8; margin-top: 2px; }
+</style>
+
+<iframe id="floor" src="http://192.168.1.157:8090/assets/erpnext/atrium/index.html"
+        title="The Atrium — agents at work"></iframe>
+
+<div id="pinned"><div class="who">Message to the judges</div><div class="msg"></div></div>
+
+<div id="ticker">
+  <div id="brand"><div class="logo">jackpotTV</div><div class="tag">agentic channel surfing</div></div>
+  <div id="track"><div id="strip"></div></div>
+</div>
+
+<script>
+const FEED = "/feed.json";
+const strip = document.getElementById("strip");
+const pinned = document.getElementById("pinned");
+let lastSeq = -1;
+
+function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+function render(items) {
+  const html = items.map(it => {
+    const cls = it.kind || "sys";
+    if (it.kind === "judge") {
+      return `<span class="item judge"><span class="dot pulse"></span>` +
+             `<span><span class="who">To the judges</span><br>${esc(it.text)}</span>` +
+             `<span class="sep">◆</span></span>`;
+    }
+    return `<span class="item ${cls}">${esc(it.text)}<span class="sep">◆</span></span>`;
+  }).join("");
+  // duplicate the strip so the loop is seamless at any width
+  strip.innerHTML = html + html;
+  const w = strip.scrollWidth / 2;
+  const dur = Math.max(24, w / 55);            /* ~55 px/s, readable, not frantic */
+  strip.animate(
+    [{ transform: "translateX(0px)" }, { transform: `translateX(${-w}px)` }],
+    { duration: dur * 1000, iterations: Infinity, easing: "linear" }
+  );
+  // pin the newest judge message
+  const judges = items.filter(i => i.kind === "judge");
+  if (judges.length) {
+    pinned.style.display = "block";
+    pinned.querySelector(".msg").textContent = judges[judges.length - 1].text;
+  }
+}
+
+async function poll() {
+  try {
+    const r = await fetch(FEED, { cache: "no-store" });
+    const d = await r.json();
+    if (d.seq !== lastSeq) { lastSeq = d.seq; render(d.items || []); }
+  } catch (e) { /* keep the last strip; a silent ticker beats a broken stage */ }
+  setTimeout(poll, 4000);
+}
+render([{ kind: "sys", text: "jackpotTV — the floor is live; agents at work, stories closing" }]);
+poll();
+</script>
