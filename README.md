@@ -80,3 +80,31 @@ tickerctl --clear
   scroll away mid-sentence.
 - The stage frame is public to compose the broadcast; the *tuned channel* in the
   guide stays behind the member gate.
+
+## Facebook Login (manual flow)
+
+Implemented per Meta's manual-flow guide — no SDK:
+
+1. `GET /auth/facebook/login` → Facebook Login dialog (`response_type=code`,
+   scopes `public_profile,email`) with a single-use, cookie-bound `state`.
+2. `GET /auth/facebook/callback` exchanges the code server-side, validates the
+   token with `debug_token` against this app's ID, fetches `/me`, and maps the
+   identity into jackpotTV's admission flow. The App Secret and the user's
+   Facebook token never reach the browser and are not persisted.
+3. `POST /auth/facebook/deauthorize` and `POST /auth/facebook/data-deletion`
+   accept Meta's signed requests (HMAC-verified); deletion removes the member
+   and returns a confirmation code checkable at `/privacy/data-deletion/{code}`.
+
+Required environment (server-side only):
+
+```
+FACEBOOK_APP_ID=
+FACEBOOK_APP_SECRET=
+FACEBOOK_REDIRECT_URI=https://jackpot.cool/auth/facebook/callback
+JACKPOT_FACEBOOK_ADMIN_IDS=<comma-separated Facebook IDs for operators>
+```
+
+Meta dashboard callbacks: deauthorize
+`https://jackpot.cool/auth/facebook/deauthorize`, data deletion
+`https://jackpot.cool/auth/facebook/data-deletion`, privacy
+`https://jackpot.cool/privacy`.

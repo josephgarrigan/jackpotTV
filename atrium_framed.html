@@ -1,0 +1,18 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>The Atrium — HAL-fm</title>
+<style>
+  html, body { margin:0; width:1280px; height:636px; overflow:hidden; background:#07090c; }
+  img { width:1280px; height:636px; object-fit:cover; image-rendering:auto; display:block; }
+</style>
+<img id="frame" alt="The Atrium">
+<script>
+  // Fresh frame every 3s; cache-bust so the wall never goes stale.
+  const img = document.getElementById('frame');
+  function tick() {
+    const f = new Image();
+    f.onload = () => { img.src = f.src; };
+    f.src = "/atrium-live.png?t=" + Date.now();
+  }
+  tick(); setInterval(tick, 3000);
+</script>

@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt httpx
+      - name: Run gate tests
+        run: python test_jackpottv.py
+
+  deploy:
+    name: Deploy to jackpotTV VM
+    needs: test
+    # Only deploy from master, and only on Sparky's private runner (.159).
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: [self-hosted, jackpot-tv]
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy over the Nebula overlay
+        env:
+          DEPLOY_TARGET: ${{ vars.DEPLOY_TARGET }}        # user@10.100.0.5 (set in repo/environment vars)
+          APP_DIR: ${{ vars.APP_DIR || '/opt/jackpottv' }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_TARGET" || { echo "DEPLOY_TARGET is not set"; exit 1; }
+          ssh -o StrictHostKeyChecking=accept-new "$DEPLOY_TARGET" "mkdir -p '$APP_DIR'"
+          rsync -az --delete \
+            --exclude '.git/' --exclude '.venv/' --exclude '__pycache__/' \
+            --exclude '*.db' --exclude 'atrium-live.png' --exclude 'feed.json' \
+            ./ "$DEPLOY_TARGET:$APP_DIR/"
+          ssh "$DEPLOY_TARGET" "cd '$APP_DIR' && (test -d .venv || python3 -m venv .venv) && .venv/bin/pip install -q -r requirements.txt && sudo -n systemctl restart jackpottv.service"
+      - name: Smoke check
+        env:
+          DEPLOY_TARGET: ${{ vars.DEPLOY_TARGET }}
+          APP_DIR: ${{ vars.APP_DIR || '/opt/jackpottv' }}
+        run: |
+          set -euo pipefail
+          ssh "$DEPLOY_TARGET" "systemctl is-active jackpottv.service"
+          # The app binds locally behind the proxy; health is the guide page.
+          ssh "$DEPLOY_TARGET" "curl -sf -m 10 -o /dev/null http://127.0.0.1:8020/"
