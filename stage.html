@@ -6,7 +6,7 @@
   html, body { width: 1280px; height: 720px; overflow: hidden; background: #07080a;
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #e8eaed; }
   /* the floor, full-bleed */
-  #floor { position: absolute; inset: 0 0 84px 0; width: 1280px; height: 636px;
+  #floor { position: absolute; left: 0; top: 0; width: 1280px; height: 636px;
     border: 0; background: #0b0d10; }
   /* bottom ticker band */
   #ticker { position: absolute; left: 0; right: 0; bottom: 0; height: 84px;
@@ -18,10 +18,12 @@
   #brand .logo { font-size: 21px; font-weight: 800; letter-spacing: .14em; color: #f5c542; }
   #brand .tag { font-size: 11px; letter-spacing: .22em; color: #8a94a3; text-transform: uppercase; }
   #track { position: absolute; left: 210px; right: 0; top: 0; bottom: 0;
-    display: flex; align-items: center; overflow: hidden; }
+    display: flex; align-items: center; overflow: hidden;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 26px, #000 calc(100% - 26px), transparent 100%);
+            mask-image: linear-gradient(90deg, transparent 0, #000 26px, #000 calc(100% - 26px), transparent 100%); }
   #strip { display: inline-flex; gap: 0; white-space: nowrap; will-change: transform; }
   .item { display: inline-flex; align-items: center; gap: 10px; padding: 0 30px;
-    font-size: 25px; font-weight: 600; line-height: 1.2; }
+    font-size: 25px; font-weight: 600; line-height: 1.2; white-space: nowrap; }
   .item .sep { color: #b8860b; font-weight: 800; }
   .judge { color: #ffe9a8; }
   .judge .who { color: #f5c542; font-size: 14px; letter-spacing: .18em; text-transform: uppercase; }
@@ -62,7 +64,7 @@ function render(items) {
     const cls = it.kind || "sys";
     if (it.kind === "judge") {
       return `<span class="item judge"><span class="dot pulse"></span>` +
-             `<span><span class="who">To the judges</span><br>${esc(it.text)}</span>` +
+             `<span class="who">To the judges</span> ${esc(it.text)}` +
              `<span class="sep">◆</span></span>`;
     }
     return `<span class="item ${cls}">${esc(it.text)}<span class="sep">◆</span></span>`;
