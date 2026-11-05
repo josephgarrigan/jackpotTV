@@ -1,39 +1,61 @@
-# Channel Surfing
+# jackpotTV — agentic channel surfing
 
-A thin social TV guide. One screen: the guide, a player, and a form that puts
-your own stream on the dial.
+One real channel — **the Atrium, captured live into HLS** — behind a members-only door.
+
+## The demo in one breath
+
+Open jackpotTV. There is one channel: *atrium*, the live floor. You cannot watch it.
+Sign in, file an access request, and wait. An operator admits you — and only then does
+the same guide hand you a player, and only then do the playlist and segments answer.
+Revoke the admission and the stream stops on the next segment. The door is not a page;
+it is checked on every request the player makes.
 
 ## Run
 
 ```bash
-python3 -m venv .venv && . .venv/bin/activate
-pip install fastapi uvicorn python-multipart
-uvicorn app:app --host 0.0.0.0 --port 8020
+cd /path/to/jackpotTV && python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+JACKPOT_HLS_DIR=/var/lib/atrium-cast/hls uvicorn jackpottv:app --host 0.0.0.0 --port 8020
 ```
 
-The guide seeds one channel, `atrium`, pointing at `ATRIUM_HLS`.
+- The cast runs separately (Playwright → ffmpeg → HLS). See `cast.sh` and the
+  `atrium-cast` / `atrium-hls` services on the streaming host.
+- `JACKPOT_ADMIN` (default `captain`) is the operator handle: first sign-in as that
+  name is admitted and can admit/revoke others at `/admin`.
+- Identity in the demo is a handle, not OAuth. That is stated, not hidden: admission
+  is the product surface here, not the login mechanism.
 
-```bash
-./cast.sh /var/lib/atrium-cast/hls/atrium     # the channel source
-python3 -m http.server 8021 -d /var/lib/atrium-cast/hls   # HLS origin
-```
+## Routes
 
-Open <http://localhost:8020>, press play, channel up.
+| Route | Gate |
+|---|---|
+| `GET /` | public guide; channel shown, locked |
+| `GET /login`, `POST /login` | files an access request on first sign-in |
+| `GET /watch/{id}` | admitted members only |
+| `GET /stream/{id}/index.m3u8`, `GET /stream/{id}/seg…ts` | admitted members only, checked every request |
+| `GET /admin`, `POST /admin/admit/{id}`, `POST /admin/revoke/{id}` | operator only |
+| `GET /api/now/{id}` | channel liveness for agents/tools |
 
-## What is real, and what is stubbed
+## Why the stream is proxied
+
+The app serves the playlist and the segments itself rather than pointing the player
+at the cast origin. That makes admission load-bearing: a leaked playlist URL without
+a member session gets `403`, revocation takes effect immediately, and the internal
+cast origin can stay on the LAN. Segment names are constrained (no path traversal).
+
+## What is real
 
 | Piece | State |
 |---|---|
-| HLS pipeline (ffmpeg → segments → player) | real |
-| Guide, registration, ownership | real |
-| Channel source | a slate today; the Atrium capture swaps in behind the same encoder |
-| Identity | a demo handle; Facebook OAuth is the last step, not the first |
-| Signed `channel.registered` event | not wired yet — the visible thread behind the demo |
+| Atrium → Chromium → ffmpeg → HLS | real, running, 3 fps |
+| Guide, admission, revocation | real |
+| Per-request stream gate | real, tested (`tests: guest 403 → admit 200 → revoke 403`) |
+| Identity | a demo handle; Facebook OAuth is a later step |
+| Agent channel tools | `GET /api/now/{id}` today; Muse connector is the next layer |
 
-## The demo path
+## Verify
 
-1. Open the guide; the Captain's channel is already on the dial.
-2. Register a channel with any HLS URL; it appears immediately.
-3. Switch to `atrium` and play it.
-
-No platform credentials exist in this app. It owns its SQLite file and nothing else.
+```bash
+uv run --no-project --with fastapi --with httpx --with python-multipart python test_jackpottv.py
+# jackpotTV gate tests: ALL PASS
+```

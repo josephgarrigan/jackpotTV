@@ -1,0 +1,67 @@
+import os
+import sys
+
+os.environ["JACKPOT_DB"] = "/tmp/jackpot-test.db"
+os.environ["JACKPOT_ADMIN"] = "captain"
+os.environ["JACKPOT_HLS_DIR"] = "/tmp/jackpot-hls"
+sys.path.insert(0, "/tmp/demo")
+
+from pathlib import Path
+Path("/tmp/jackpot-hls/atrium").mkdir(parents=True, exist_ok=True)
+Path("/tmp/jackpot-hls/atrium/index.m3u8").write_text("#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2.0,\nseg00001.ts\n")
+Path("/tmp/jackpot-hls/atrium/seg00001.ts").write_bytes(b"TS")
+
+from fastapi.testclient import TestClient
+import jackpottv
+
+c = TestClient(jackpottv.app)
+c.__enter__()
+
+r = c.get("/")
+assert r.status_code == 200 and "admission required" in r.text, r.text[:200]
+
+r = c.get("/watch/1")
+assert r.status_code == 403, r.status_code
+
+r = c.get("/stream/1/index.m3u8")
+assert r.status_code == 403, r.status_code
+
+r = c.post("/login", data={"handle": "captain"}, follow_redirects=False)
+assert r.status_code == 303
+r = c.get("/watch/1")
+assert r.status_code == 200 and "hls.js" in r.text
+r = c.get("/stream/1/index.m3u8")
+assert r.status_code == 200 and "#EXTM3U" in r.text
+r = c.get("/stream/1/seg00001.ts")
+assert r.status_code == 200 and r.content == b"TS"
+r = c.get("/stream/1/../../jackpottv.py")
+assert r.status_code in (400, 404), r.status_code
+
+guest = TestClient(jackpottv.app)
+guest.post("/login", data={"handle": "viewer-one"})
+r = guest.get("/stream/1/index.m3u8")
+assert r.status_code == 403
+r = guest.get("/")
+assert "pending" in r.text.lower()
+
+# captain admits from a fresh client carrying the captain cookie
+cap = TestClient(jackpottv.app)
+cap.post("/login", data={"handle": "captain"})
+r = cap.get("/admin")
+assert r.status_code == 200 and "viewer-one" in r.text
+import sqlite3
+mid = sqlite3.connect("/tmp/jackpot-test.db").execute(
+    "select id from members where handle='viewer-one'").fetchone()[0]
+r = cap.post(f"/admin/admit/{mid}", follow_redirects=False)
+assert r.status_code == 303
+r = guest.get("/stream/1/index.m3u8")
+assert r.status_code == 200, r.status_code
+
+r = cap.post(f"/admin/revoke/{mid}", follow_redirects=False)
+assert r.status_code == 303
+r = guest.get("/stream/1/index.m3u8")
+assert r.status_code == 403, r.status_code
+
+r = c.get("/api/now/1")
+assert r.status_code == 200 and r.json()["live"] is True
+print("jackpotTV gate tests: ALL PASS")
